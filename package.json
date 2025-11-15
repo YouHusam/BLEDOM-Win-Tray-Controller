@@ -1,0 +1,56 @@
+{
+  "name": "bt-control",
+  "version": "0.1.0",
+  "description": "Windows tray controller for BLELKDOM LED strips",
+  "main": "dist/main/main.js",
+  "type": "module",
+  "scripts": {
+    "clean": "shx rm -rf dist",
+    "compile": "tsc -p tsconfig.json",
+    "build:renderer": "vue-tsc -p tsconfig.renderer.json --noEmit && vite build",
+    "dev:renderer": "vite build --watch --mode development",
+    "build": "npm run clean && npm run compile && npm run build:renderer",
+    "start": "npm run build && electron .",
+    "dev": "npm run build:renderer && concurrently -k \"tsc -w\" \"npm run dev:renderer\" \"wait-on dist/main/main.js dist/renderer/index.html && electron .\"",
+    "dist": "npm run build && electron-builder --win --x64"
+  },
+  "keywords": [
+    "electron",
+    "bluetooth",
+    "led",
+    "tray"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@vitejs/plugin-vue": "^5.1.4",
+    "chokidar-cli": "^3.0.0",
+    "concurrently": "^9.2.1",
+    "electron": "^39.2.0",
+    "electron-builder": "^25.1.6",
+    "shx": "^0.4.0",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.8",
+    "vue-tsc": "^2.1.6",
+    "wait-on": "^9.0.3"
+  },
+  "dependencies": {
+    "@abandonware/noble": "^1.9.2-26",
+    "electron-store": "^11.0.2",
+    "vue": "^3.5.24",
+    "vue-router": "^4.4.3"
+  },
+  "build": {
+    "appId": "com.btcontrol.app",
+    "productName": "BT Control",
+    "files": [
+      "dist/**/*",
+      "resources/**/*"
+    ],
+    "win": {
+      "icon": "resources/icon.png",
+      "target": "portable"
+    }
+  }
+}
