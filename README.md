@@ -1,71 +1,78 @@
+# WARNING: VIBE CODE AHEAD
+
+While I am an experienced developer I was too lazy to write my own code, so this is mostly written by GPT-5.1-Codex and Claude Sonnet 4.5
+
 # BLELKDOM Tray Controller
 
-Minimal Windows tray experience (inspired by Twinkle Tray) built on Electron + TypeScript for controlling BLELKDOM Bluetooth LED strips. The current build focuses on a compact acrylic-like flyout with first-run device pairing, a cached selection, and quick power/color presets that talk to the same FFF0/FFF3 characteristic combo used in [FreekBes/bledom_controller](https://github.com/FreekBes/bledom_controller).
+Electron + Vue tray utility for controlling BLELKDOM LED strips from Windows. It mirrors the quick-settings flyout aesthetic, remembers the last paired device, and exposes power, presets, brightness, and custom colors through a compact UI backed by typed IPC contracts.
 
-## Features
+## Highlights
 
-- Frameless tray flyout styled after modern Windows quick settings
-- Power toggle and three preset buttons mapped to RGB values
-- First-run Bluetooth scan with cached device selection and automatic reconnect each time you open the tray
-- Shared IPC contract and preload bridge with strict TypeScript types
-- BLE stack backed by `@abandonware/noble` with an automatic fallback simulator when no adapter/drivers are present
+- Modern renderer stack (Vite + Vue 3 + TypeScript) with card-based components (`PowerCard`, `BrightnessCard`, `CustomColorCard`, `PresetList`).
+- BLE client built on `@abandonware/noble`, matching the `FFF0/FFF3` command pattern documented by [FreekBes/bledom_controller](https://github.com/FreekBes/bledom_controller).
+- Automatic reconnect using `electron-store` to persist the selected peripheral and custom presets.
+- Simulator fallback keeps the UI interactive when no adapter or drivers are present.
+- Strictly typed shared IPC surface via `src/shared/ipc.ts` and a preload bridge that only exposes the safe control API.
 
-## Project structure
+## Repository layout
 
 ```
 src/
-  main/          # Electron main process, tray + window orchestration
-  preload/       # Context bridge exposing safe control API to renderer
-  renderer/      # Acrylic-like UI rendered in the tray flyout
-  shared/        # IPC constants and shared types
+  main/          # Electron main process, BLE client, tray + window lifecycle
+  preload/       # Context-bridge exposing typed controller methods to the UI
+  renderer/      # Vue SPA rendered inside the tray flyout
+  renderer/components/  # Reusable cards for power, presets, brightness, custom colors
+  renderer/views/       # App screens (scan + control)
+  shared/        # IPC channels, DTOs, and TypeScript helpers
+resources/       # Icons and static assets bundled with Electron
 ```
 
-## Prerequisites
+## Requirements
 
-- Node.js 18+ (includes npm). Install from https://nodejs.org if the `node`/`npm` commands are not available in your shell yet.
-- Windows 10/11 with Bluetooth hardware enabled (the tray UI still runs without it, but device scans will fall back to the simulator).
-- Native build tooling required by `@abandonware/noble`:
-  - Visual Studio Build Tools 2019+ with “Desktop development with C++” or `npm install --global --production windows-build-tools` (admin PowerShell).
-  - Python 3 for node-gyp (ships with the build-tools option above).
+- Windows 10/11 with Bluetooth enabled.
+- Node.js 18+ (ships with npm).
+- Native toolchain for `@abandonware/noble` (`npm install --global windows-build-tools` or Visual Studio Build Tools + Python 3).
 
-## Getting started
+## Install & run
 
 ```powershell
 npm install
 npm run dev
 ```
 
-The `dev` script compiles TypeScript in watch mode, mirrors renderer assets, waits for `dist/main/main.js`, and launches Electron so you can iterate quickly. The flyout hides itself when it loses focus—click the tray icon to toggle it again.
+The dev script builds the preload/renderer in watch mode and restarts Electron once the main bundle is ready. The flyout hides when it loses focus—click the tray icon again to toggle it.
 
-### First run
+### Pairing flow
 
-1. Launch `npm run dev` and click the tray icon.
-2. Hit **Scan** in the “Device” card; your BLELKDOM strip should appear (service `0000fff0-0000-1000-8000-00805f9b34fb`).
-3. Select the device once. The choice is cached via `electron-store`; every time you reopen the tray, the app reconnects automatically and disconnects when you close/blur the flyout.
-4. Use the power toggle or RGB presets. When no hardware is available, the simulator still produces UI feedback so you can continue iterating on layouts.
+1. Start `npm run dev` and click the tray icon to open the flyout.
+2. Use the **Scan** button in the device card; BLELKDOM peripherals broadcasting service `FFF0` should appear.
+3. Select the strip once. The selection and any custom presets persist via `electron-store`.
+4. From the control view you can toggle power, adjust brightness, pick from built-in presets, or create your own color + label combo.
 
-To produce a clean build once:
+### Production build
 
 ```powershell
 npm run build
 npm start
 ```
 
-## Wiring real BLE commands
+`npm run build` produces optimized main, preload, and renderer bundles inside `dist/`. Running `npm start` after the build launches Electron using those artifacts.
 
-`src/main/ble/BlelkdomClient.ts` now bundles both behaviors:
+## BLE + simulator behavior
 
-1. When `@abandonware/noble` loads successfully, it scans for BLELKDOM peripherals (service `FFF0`) and writes the same `0x7e…0xef` packets as the reference web app.
-2. When noble fails to load (no adapter or missing build prerequisites), it falls back to a deterministic simulator so the renderer + IPC layers can still be exercised.
+- `src/main/ble/BlelkdomClient.ts` first attempts to initialize `@abandonware/noble` and scan for devices with service UUID `0000fff0-0000-1000-8000-00805f9b34fb`.
+- If initialization fails, the client falls back to a deterministic simulator so the renderer continues to receive state updates (useful for UI work without hardware).
+- Commands dispatched from the renderer are encoded with the same `0x7e … 0xef` packets as the reference controller, covering power, color, and brightness.
 
-The implementation intentionally mirrors the packet formats from [FreekBes/bledom_controller](https://github.com/FreekBes/bledom_controller) for color and brightness control. To extend it:
+## Development notes
 
-1. Map additional characteristics or effects by appending helper methods that call `writeCommand()` with the appropriate payloads.
-2. Refine discovery/selection (e.g., multi-device support, RSSI sorting) by editing the `discoverDevices` helper.
-3. Layer more presets or brightness sliders in the renderer once the BLE plumbing is stable.
+- Renderer is a Vite + Vue 3 app; modify `src/renderer` components to iterate on the UI. Scoped styles live next to their components, with shared variables in `src/renderer/styles.css`.
+- IPC contracts and DTOs reside in `src/shared/ipc.ts`; update both main and renderer imports when adding new commands/events.
+- Persistent settings (selected device, custom presets) are managed via `src/main/store/settings.ts` using `electron-store`.
+- Tests are currently manual; run `npm run dev` for hot reload or `npm run build` for release validation.
 
-## Next steps
+## Roadmap ideas
 
-- Integrate a full preset editor, brightness slider, and automation scenes.
-- Surface troubleshooting info (adapter state, last error) directly in the flyout.
-- Ship installers via `electron-builder` once BLE support is validated.
+- Display adapter/driver diagnostics directly in the flyout.
+- Multi-device management and quick swapping.
+- Packaged installer via `electron-builder` once BLE stability is confirmed.
